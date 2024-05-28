@@ -1,20 +1,40 @@
+import psycopg2
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
-        content_lenght = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_lenght)
-        
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
         print(f"Received data: {post_data.decode('utf-8')}")
 
-        data = json.loads(post_data)
-        processed_data = {"status": "processed", "original_data": data}
-        
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps(processed_data).encode('utf-8'))
+        # Сохранение данных в базу данных
+        try:
+            connection = psycopg2.connect(
+                dbname="test_db",
+                user="user1",
+                password="user1",
+                host="localhost"
+            )
+            cursor = connection.cursor()
+
+            # Вставка данных в таблицу
+            cursor.execute("INSERT INTO test_data (data) VALUES (%s)", (post_data.decode('utf-8'),))
+            connection.commit()
+
+            cursor.close()
+            connection.close()
+            
+            # Отправка ответа клиенту
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            response = {"status": "success"}
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+
+        except psycopg2.Error as e:
+            print("Error: Could not connect to the database.")
+            print(e)
     
     def log_message(self, format, *args):
         with open("server.log", "a") as f:
